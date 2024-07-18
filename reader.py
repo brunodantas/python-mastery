@@ -1,14 +1,36 @@
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 import csv
 from sys import intern
 from typing import Dict
 
 
-def read_csv_as_dicts(filename, coltypes):
-    with open(filename) as f:
-        rows = csv.reader(f)
-        headers = next(rows)
-        return [{k: f(v) for k, v, f in zip(headers, row, coltypes)} for row in rows]
+class CSVParser(ABC):
+    def parse(self, filename):
+        with open(filename) as f:
+            rows = csv.reader(f)
+            headers = next(rows)
+            return [self.make_record(headers, row) for row in rows]
+
+    @abstractmethod
+    def make_record(self, headers, row):
+        pass
+
+
+class DictCSVParser(CSVParser):
+    def __init__(self, types) -> None:
+        self.types = types
+
+    def make_record(self, headers, row):
+        return {name: f(v) for name, f, v in zip(headers, self.types, row)}
+
+
+class InstanceCSVParser(CSVParser):
+    def __init__(self, cls) -> None:
+        self.cls = cls
+
+    def make_record(self, headers, row):
+        return self.cls.from_row(row)
 
 
 class DataCollection(Sequence):
@@ -41,6 +63,17 @@ def read_csv_as_columns(filename, coltypes):
         for row in rows:
             data.append(row)
     return data
+
+
+def read_csv_as_dicts(filename, coltypes):
+    parser = DictCSVParser(coltypes)
+    return parser.parse(filename)
+
+
+def read_csv_as_instances(filename, cls):
+    """Read a CSV file into a list of instances"""
+    parser = InstanceCSVParser(cls)
+    return parser.parse(filename)
 
 
 if __name__ == "__main__":
